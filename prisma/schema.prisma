@@ -1,11 +1,17 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
-}
-
 datasource db {
   provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Mod {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  category  String?
+  summary   String?
+  sourceUrl String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
