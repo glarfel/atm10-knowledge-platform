@@ -1,65 +1,172 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+
+type Mod = {
+  id: number;
+  name: string;
+  category: string | null;
+  summary: string | null;
+  sourceUrl: string;
+};
+
+export default function HomePage() {
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("");
+
+  const [categories, setCategories] = useState<string[]>([""]); // dynamic, loaded from API
+  const [results, setResults] = useState<Mod[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load categories once from the DB (via API)
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/categories");
+        if (!res.ok) return;
+        const data = await res.json();
+        setCategories(["", ...(data.categories ?? [])]);
+      } catch {
+        // ignore
+      }
+    };
+    load();
+  }, []);
+
+  // Search whenever query/category changes (with small debounce)
+  useEffect(() => {
+    const run = async () => {
+      if (q.trim().length < 2 && !category) {
+        setResults([]);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const params = new URLSearchParams();
+        if (q.trim()) params.set("q", q.trim());
+        if (category) params.set("category", category);
+
+        const res = await fetch(`/api/search?${params.toString()}`);
+
+        // ✅ harden against API errors / empty responses
+        if (!res.ok) {
+          setResults([]);
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+        setResults(data.results ?? []);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const t = setTimeout(run, 200);
+    return () => clearTimeout(t);
+  }, [q, category]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main
+      style={{
+        padding: 24,
+        fontFamily: "system-ui",
+        maxWidth: 980,
+        margin: "0 auto",
+      }}
+    >
+      <h1 style={{ marginBottom: 6 }}>ATM10 Knowledge Platform</h1>
+      <p style={{ marginTop: 0, opacity: 0.8 }}>
+        Search mods from the ATM10 mod list and view a clean summary with source
+        attribution.
+      </p>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search a mod (e.g., Applied Energistics 2, Embeddium, Powah)"
+          style={{ flex: "1 1 420px", padding: 12, fontSize: 16 }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          style={{ padding: 12, fontSize: 16, minWidth: 220 }}
+        >
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c === "" ? "All categories" : c}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading && <p style={{ marginTop: 16 }}>Searching…</p>}
+
+      <div style={{ marginTop: 16 }}>
+        {results.length > 0 && (
+          <p style={{ opacity: 0.8 }}>{results.length} results</p>
+        )}
+
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {results.map((m) => (
+            <li
+              key={m.id}
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: 10,
+                padding: 14,
+                marginBottom: 12,
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>
+                    <Link
+                      href={`/mods/${encodeURIComponent(m.name)}`}
+                      style={{ textDecoration: "none" }}
+                    >
+                      {m.name}
+                    </Link>
+                  </div>
+                  <div style={{ opacity: 0.8, marginTop: 2 }}>
+                    {m.category ?? "Uncategorized"}
+                  </div>
+                </div>
+
+                <a
+                  href={m.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  Source
+                </a>
+              </div>
+
+              {m.summary ? (
+                <p style={{ marginTop: 10, marginBottom: 0 }}>{m.summary}</p>
+              ) : (
+                <p style={{ marginTop: 10, marginBottom: 0, opacity: 0.7 }}>
+                  No summary available.
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </main>
   );
 }

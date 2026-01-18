@@ -1,5 +1,6 @@
 {
   "name": "atm10-knowledge",
+  "type": "module",
   "version": "0.1.0",
   "private": true,
   "scripts": {
