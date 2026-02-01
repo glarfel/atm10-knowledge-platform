@@ -3,6 +3,11 @@
 A searchable knowledge platform for the **All The Mods 10 (ATM10)** Minecraft modpack.  
 This project aggregates mod metadata into a structured database and provides a clean search and browsing experience.
 
+## Resume Highlights
+- Full-stack Next.js + Prisma app with an ingestion pipeline and structured database
+- Search + filter UX with dynamic routes and related-mod recommendations
+- Reproducible local setup via npm scripts and Prisma tooling
+
 ## 🚀 Features
 - 🔍 Search mods by **name or summary**
 - 🗂 Filter by mod **category**

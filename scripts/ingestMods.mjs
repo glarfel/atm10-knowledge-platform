@@ -1,29 +1,21 @@
 // scripts/ingestMods.js
-// Parse the ATM10 mod list page tables (MOD NAME + SUMMARY) and store into SQLite via Prisma (Prisma 7 + better-sqlite3 adapter).
+// Parse the ATM10 mod list page tables (MOD NAME + SUMMARY) and store into SQLite via Prisma (Prisma 6, no adapter).
 
 import "dotenv/config";
 
-import pkg from "@prisma/client";
-const { PrismaClient } = pkg;
-
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaClient } from "@prisma/client";
 import * as cheerio from "cheerio";
 
 const SOURCE_URL =
   "https://www.minecraft-guides.com/wiki/all-the-mods-10/atm-10-mod-list/";
 
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL ?? "file:./dev.db",
-});
-
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 function norm(s) {
   return (s ?? "").replace(/\s+/g, " ").trim();
 }
 
 function isModSummaryTable($, tableEl) {
-  // Determine if a table is the mod list table by checking its header cells.
   const headers = [];
   $(tableEl)
     .find("tr")
@@ -31,7 +23,6 @@ function isModSummaryTable($, tableEl) {
     .find("th,td")
     .each((_, cell) => headers.push(norm($(cell).text()).toLowerCase()));
 
-  // We want a table whose first row looks like: "MOD NAME" and "SUMMARY"
   const hasModName = headers.some((h) => h.includes("mod name"));
   const hasSummary = headers.some((h) => h.includes("summary"));
   return hasModName && hasSummary;
@@ -54,7 +45,7 @@ function extractRows($, tableEl) {
       const name = cells[0];
       const summary = cells.slice(1).join(" ").trim();
 
-      // 🔒 FILTER HERE (correct place)
+      // Filter junk rows / missing summaries
       if (!name) return;
       if (!summary) return;
       if (summary.toLowerCase() === "null") return;
@@ -68,13 +59,13 @@ function extractRows($, tableEl) {
 async function main() {
   console.log("Fetching:", SOURCE_URL);
 
-  // Clean up any old junk rows from earlier scraping attempts for this same source
-await prisma.mod.deleteMany({
-  where: {
-    sourceUrl: SOURCE_URL,
-    OR: [{ category: null }, { summary: null }],
-  },
-});
+  // Optional cleanup: remove junk rows from older attempts for this same source
+  await prisma.mod.deleteMany({
+    where: {
+      sourceUrl: SOURCE_URL,
+      OR: [{ category: null }, { summary: null }],
+    },
+  });
 
   const res = await fetch(SOURCE_URL);
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -82,7 +73,7 @@ await prisma.mod.deleteMany({
 
   const $ = cheerio.load(html);
 
-  // Try common "main content" containers first so we don't grab nav/footer tables.
+  // Limit scraping to main content so we don't pick up navigation/footer links
   const content =
     $("article").first().length
       ? $("article").first()
@@ -92,19 +83,14 @@ await prisma.mod.deleteMany({
           ? $("main").first()
           : $.root();
 
-  // Categories are h2 headings on the page (e.g., "API & Library", "Biomes & Dimensions", etc.)
+  // Category headings on the page
   const categories = [];
   content.find("h2").each((_, h2) => {
     const title = norm($(h2).text());
     if (!title) return;
 
-    // Skip generic / page title repeats
     const lower = title.toLowerCase();
-    if (
-      lower.includes("all the mods") ||
-      lower === "contents" ||
-      lower === "share"
-    ) {
+    if (lower.includes("all the mods") || lower === "contents" || lower === "share") {
       return;
     }
 
@@ -120,8 +106,7 @@ await prisma.mod.deleteMany({
   for (const cat of categories) {
     const categoryTitle = cat.title;
 
-    // Starting from the category h2, walk forward through siblings
-    // until the next h2 appears. Collect mod summary tables in that region.
+    // Collect elements after this h2 until the next h2
     const regionEls = [];
     let cur = $(cat.el).next();
 
@@ -131,7 +116,7 @@ await prisma.mod.deleteMany({
       cur = cur.next();
     }
 
-    // Search tables within the region
+    // Gather tables in this region
     const tables = [];
     for (const el of regionEls) {
       el.find("table").each((_, t) => tables.push(t));
@@ -165,7 +150,7 @@ await prisma.mod.deleteMany({
         .join(", ")})`
     );
 
-    // Upsert to DB
+    // Upsert by name
     for (const m of categoryMods) {
       await prisma.mod.upsert({
         where: { name: m.name },
