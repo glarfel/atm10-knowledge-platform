@@ -76,6 +76,8 @@ export default async function ModPage({
         </span>
       </div>
 
+      <hr style={{ margin: "24px 0", opacity: 0.3 }} />
+      
       {related.length > 0 && (
         <div style={{ marginTop: 28 }}>
           <h3 style={{ marginBottom: 10 }}>Related in {mod.category}</h3>

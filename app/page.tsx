@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Mod = {
@@ -15,26 +15,42 @@ export default function HomePage() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
 
-  const [categories, setCategories] = useState<string[]>([""]); // dynamic, loaded from API
+  const [categories, setCategories] = useState<string[]>([""]);
   const [results, setResults] = useState<Mod[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Load categories once from the DB (via API)
+  const [stats, setStats] = useState<{
+    mods: number;
+    categories: number;
+  } | null>(null);
+
+  // Load categories
   useEffect(() => {
-    const load = async () => {
+    const loadCategories = async () => {
       try {
         const res = await fetch("/api/categories");
         if (!res.ok) return;
         const data = await res.json();
         setCategories(["", ...(data.categories ?? [])]);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
-    load();
+    loadCategories();
   }, []);
 
-  // Search whenever query/category changes (with small debounce)
+  // Load stats
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const res = await fetch("/api/stats");
+        if (!res.ok) return;
+        const data = await res.json();
+        setStats(data);
+      } catch {}
+    };
+    loadStats();
+  }, []);
+
+  // Search
   useEffect(() => {
     const run = async () => {
       if (q.trim().length < 2 && !category) {
@@ -50,8 +66,6 @@ export default function HomePage() {
         if (category) params.set("category", category);
 
         const res = await fetch(`/api/search?${params.toString()}`);
-
-        // ✅ harden against API errors / empty responses
         if (!res.ok) {
           setResults([]);
           setLoading(false);
@@ -81,16 +95,22 @@ export default function HomePage() {
       }}
     >
       <h1 style={{ marginBottom: 6 }}>ATM10 Knowledge Platform</h1>
+
       <p style={{ marginTop: 0, opacity: 0.8 }}>
-        Search mods from the ATM10 mod list and view a clean summary with source
-        attribution.
+        Search and explore mods from the All The Mods 10 modpack.
       </p>
+
+      {stats && (
+        <p style={{ marginTop: 4, opacity: 0.7 }}>
+          {stats.mods} mods indexed • {stats.categories} categories
+        </p>
+      )}
 
       <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search a mod (e.g., Applied Energistics 2, Embeddium, Powah)"
+          placeholder="Search a mod (e.g., Applied, storage, magic)"
           style={{ flex: "1 1 420px", padding: 12, fontSize: 16 }}
         />
 
@@ -109,64 +129,96 @@ export default function HomePage() {
 
       {loading && <p style={{ marginTop: 16 }}>Searching…</p>}
 
-      <div style={{ marginTop: 16 }}>
-        {results.length > 0 && (
-          <p style={{ opacity: 0.8 }}>{results.length} results</p>
-        )}
+      {!loading && (q.trim().length >= 2 || category) && results.length === 0 && (
+        <p style={{ marginTop: 20, opacity: 0.8 }}>
+          No mods matched your search.
+          <br />
+          Try keywords like <em>storage</em>, <em>magic</em>, or{" "}
+          <em>performance</em>.
+        </p>
+      )}
 
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {results.map((m) => (
-            <li
-              key={m.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 10,
-                padding: 14,
-                marginBottom: 12,
-              }}
-            >
-              <div
+      {results.length > 0 && (
+        <>
+          <hr style={{ margin: "24px 0", opacity: 0.3 }} />
+
+          <p style={{ opacity: 0.8 }}>{results.length} results</p>
+
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {results.map((m) => (
+              <li
+                key={m.id}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 12,
+                  transition: "box-shadow 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow =
+                    "0 4px 14px rgba(0,0,0,0.08)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>
-                    <Link
-                      href={`/mods/${encodeURIComponent(m.name)}`}
-                      style={{ textDecoration: "none" }}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>
+                      <Link
+                        href={`/mods/${encodeURIComponent(m.name)}`}
+                        style={{ textDecoration: "none" }}
+                      >
+                        {m.name}
+                      </Link>
+                    </div>
+
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        border: "1px solid #ddd",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        opacity: 0.85,
+                        marginTop: 6,
+                      }}
                     >
-                      {m.name}
-                    </Link>
+                      {m.category ?? "Uncategorized"}
+                    </span>
                   </div>
-                  <div style={{ opacity: 0.8, marginTop: 2 }}>
-                    {m.category ?? "Uncategorized"}
-                  </div>
+
+                  <a
+                    href={m.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    Source
+                  </a>
                 </div>
 
-                <a
-                  href={m.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ whiteSpace: "nowrap" }}
-                >
-                  Source
-                </a>
-              </div>
-
-              {m.summary ? (
-                <p style={{ marginTop: 10, marginBottom: 0 }}>{m.summary}</p>
-              ) : (
-                <p style={{ marginTop: 10, marginBottom: 0, opacity: 0.7 }}>
-                  No summary available.
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
+                {m.summary ? (
+                  <p style={{ marginTop: 10, marginBottom: 0 }}>
+                    {m.summary}
+                  </p>
+                ) : (
+                  <p style={{ marginTop: 10, marginBottom: 0, opacity: 0.7 }}>
+                    No summary available.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </main>
   );
 }
